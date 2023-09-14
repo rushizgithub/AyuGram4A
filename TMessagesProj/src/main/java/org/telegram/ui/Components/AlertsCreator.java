@@ -63,6 +63,10 @@ import androidx.annotation.RawRes;
 import androidx.annotation.RequiresApi;
 import androidx.core.util.Consumer;
 
+import com.radolyn.ayugram.AyuConstants;
+import com.radolyn.ayugram.messages.AyuMessagesController;
+import com.radolyn.ayugram.messages.AyuSavePreferences;
+import com.radolyn.ayugram.utils.AyuState;
 import org.telegram.messenger.AccountInstance;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
@@ -5359,6 +5363,10 @@ public class AlertsCreator {
             count = selectedMessages[0].size() + selectedMessages[1].size();
         }
 
+        // --- AyuGram hook
+        FrameLayout ayuFrameLayout = null;
+        // --- AyuGram hook
+
         long dialogId;
         if (encryptedChat != null) {
             dialogId = DialogObject.makeEncryptedDialogId(encryptedChat.id);
@@ -5487,6 +5495,7 @@ public class AlertsCreator {
                     return;
                 }
                 FrameLayout frameLayout = new FrameLayout(activity);
+                ayuFrameLayout = frameLayout;
                 int num = 0;
                 String name = actionUser != null ? ContactsController.formatName(actionUser.first_name, actionUser.last_name) : actionChat.title;
                 for (int a = 0; a < 3; a++) {
@@ -5520,6 +5529,7 @@ public class AlertsCreator {
             } else if (!hasNotOut && myMessagesCount > 0 && hasNonDiceMessages) {
                 hasDeleteForAllCheck = true;
                 FrameLayout frameLayout = new FrameLayout(activity);
+                ayuFrameLayout = frameLayout;
                 CheckBoxCell cell = new CheckBoxCell(activity, 1, resourcesProvider);
                 cell.setBackgroundDrawable(Theme.getSelectorDrawable(false));
                 if (chat != null && hasNotOut) {
@@ -5583,6 +5593,7 @@ public class AlertsCreator {
             if (myMessagesCount > 0 && hasNonDiceMessages && (user == null || !UserObject.isDeleted(user))) {
                 hasDeleteForAllCheck = true;
                 FrameLayout frameLayout = new FrameLayout(activity);
+                ayuFrameLayout = frameLayout;
                 CheckBoxCell cell = new CheckBoxCell(activity, 1, resourcesProvider);
                 cell.setBackgroundDrawable(Theme.getSelectorDrawable(false));
                 if (canDeleteInbox) {
@@ -5607,9 +5618,38 @@ public class AlertsCreator {
                 builder.setCustomViewOffset(9);
             }
         }
+
+        // --- AyuGram hook
+        final boolean[] keepLocally = {false};
+
+        if (ayuFrameLayout == null) {
+            ayuFrameLayout = new FrameLayout(activity);
+            builder.setView(ayuFrameLayout);
+            builder.setCustomViewOffset(9);
+        }
+
+        CheckBoxCell cell = new CheckBoxCell(activity, 1, resourcesProvider);
+        cell.setBackgroundDrawable(Theme.getSelectorDrawable(false));
+        cell.setText(LocaleController.getString(R.string.DeleteKeepLocally), "", false, false);
+        cell.setTag(4);
+
+        cell.setPadding(LocaleController.isRTL ? AndroidUtilities.dp(16) : AndroidUtilities.dp(8), 0, LocaleController.isRTL ? AndroidUtilities.dp(8) : AndroidUtilities.dp(16), 0);
+        ayuFrameLayout.addView(cell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.TOP | Gravity.LEFT, 0, 48 * ayuFrameLayout.getChildCount(), 0, 0));
+
+        cell.setOnClickListener(v -> {
+            CheckBoxCell cell1 = (CheckBoxCell) v;
+            keepLocally[0] = !keepLocally[0];
+            cell1.setChecked(keepLocally[0], true);
+        });
+        // --- AyuGram hook
+
         final TLRPC.User userFinal = actionUser;
         final TLRPC.Chat chatFinal = actionChat;
         builder.setPositiveButton(LocaleController.getString("Delete", R.string.Delete), (dialogInterface, i) -> {
+            if (keepLocally[0]) {
+                AyuState.setHideSelection(true, 1);
+            }
+
             ArrayList<Integer> ids = null;
             if (selectedMessage != null) {
                 ids = new ArrayList<>();
@@ -5618,6 +5658,15 @@ public class AlertsCreator {
                     for (int a = 0; a < selectedGroup.messages.size(); a++) {
                         MessageObject messageObject = selectedGroup.messages.get(a);
                         ids.add(messageObject.getId());
+
+                        if (!keepLocally[0]) {
+                            AyuState.permitDeleteMessage(dialogId, messageObject.getId());
+                        } else {
+                            var prefs = new AyuSavePreferences(messageObject.messageOwner, currentAccount);
+                            prefs.setDialogId(dialogId);
+                            AyuMessagesController.getInstance().onMessageDeleted(prefs);
+                        }
+
                         if (encryptedChat != null && messageObject.messageOwner.random_id != 0 && messageObject.type != 10) {
                             if (random_ids == null) {
                                 random_ids = new ArrayList<>();
@@ -5627,17 +5676,44 @@ public class AlertsCreator {
                     }
                 } else {
                     ids.add(selectedMessage.getId());
+
+                    if (!keepLocally[0]) {
+                        AyuState.permitDeleteMessage(dialogId, selectedMessage.getId());
+                    } else {
+                        var prefs = new AyuSavePreferences(selectedMessage.messageOwner, currentAccount);
+                        prefs.setDialogId(dialogId);
+                        AyuMessagesController.getInstance().onMessageDeleted(prefs);
+                    }
+
                     if (encryptedChat != null && selectedMessage.messageOwner.random_id != 0 && selectedMessage.type != 10) {
                         random_ids = new ArrayList<>();
                         random_ids.add(selectedMessage.messageOwner.random_id);
                     }
                 }
+
+                ArrayList<Integer> finalIds = ids;
+                AndroidUtilities.runOnUIThread(() -> {
+                    // invalidating views
+                    NotificationCenter.getInstance(currentAccount).postNotificationName(AyuConstants.MESSAGES_DELETED_NOTIFICATION, dialogId, finalIds);
+                });
+
                 MessagesController.getInstance(currentAccount).deleteMessages(ids, random_ids, encryptedChat, dialogId, deleteForAll[0], scheduled);
             } else {
                 for (int a = 1; a >= 0; a--) {
                     ids = new ArrayList<>();
                     for (int b = 0; b < selectedMessages[a].size(); b++) {
                         ids.add(selectedMessages[a].keyAt(b));
+
+                        if (!keepLocally[0]) {
+                            AyuState.permitDeleteMessage(dialogId, selectedMessages[a].keyAt(b));
+                        } else {
+                            var val = selectedMessages[a].valueAt(b);
+                            if (val != null) {
+                                var prefs = new AyuSavePreferences(val.messageOwner, currentAccount);
+                                prefs.setDialogId(dialogId);
+                                AyuMessagesController.getInstance().onMessageDeleted(prefs);
+                            }
+                        }
                     }
                     ArrayList<Long> random_ids = null;
                     long channelId = 0;
@@ -5656,6 +5732,13 @@ public class AlertsCreator {
                             }
                         }
                     }
+
+                    ArrayList<Integer> finalIds = ids;
+                    AndroidUtilities.runOnUIThread(() -> {
+                        // invalidating views
+                        NotificationCenter.getInstance(currentAccount).postNotificationName(AyuConstants.MESSAGES_DELETED_NOTIFICATION, dialogId, finalIds);
+                    });
+
                     MessagesController.getInstance(currentAccount).deleteMessages(ids, random_ids, encryptedChat, dialogId, deleteForAll[0], scheduled);
                     selectedMessages[a].clear();
                 }

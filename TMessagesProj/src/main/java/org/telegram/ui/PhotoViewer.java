@@ -137,6 +137,7 @@ import com.google.android.gms.vision.Frame;
 import com.google.android.gms.vision.face.Face;
 import com.google.android.gms.vision.face.FaceDetector;
 
+import com.radolyn.ayugram.AyuConfig;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.AnimationNotificationsLocker;
 import org.telegram.messenger.ApplicationLoader;
@@ -4092,6 +4093,11 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             if (scheduled) {
                 return;
             }
+            // --- AyuGram hook
+            if (AyuConfig.saveDeletedMessages) {
+                return;
+            }
+            // --- AyuGram hook
             long channelId = (Long) args[1];
             ArrayList<Integer> markAsDeletedMessages = (ArrayList<Integer>) args[0];
             boolean reset = false;
@@ -5344,7 +5350,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         menu = actionBar.createMenu();
         menu.setOnLayoutListener(this::updateActionBarTitlePadding);
 
-        pipItem = menu.addItem(gallery_menu_pip, R.drawable.ic_goinline);
+        pipItem = menu.addItem(gallery_menu_pip, ExteraConfig.useSolarIcons ? R.drawable.header_goinline_solar : R.drawable.ic_goinline);
         pipItem.setContentDescription(LocaleController.getString("AccDescrPipMode", R.string.AccDescrPipMode));
         masksItem = menu.addItem(gallery_menu_masks, R.drawable.msg_mask);
         masksItem.setContentDescription(LocaleController.getString("Masks", R.string.Masks));

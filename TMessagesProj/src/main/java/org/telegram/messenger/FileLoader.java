@@ -11,6 +11,8 @@ package org.telegram.messenger;
 import android.text.TextUtils;
 import android.util.SparseArray;
 
+import com.radolyn.ayugram.utils.AyuFileLocation;
+
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.LaunchActivity;
@@ -1071,13 +1073,13 @@ public class FileLoader extends BaseController {
             }
         } else {
             if (MessageObject.getMedia(message) instanceof TLRPC.TL_messageMediaDocument) {
-                return getPathToAttach(MessageObject.getMedia(message).document, null, MessageObject.getMedia(message).ttl_seconds != 0, useFileDatabaseQueue);
+                return getPathToAttach(MessageObject.getMedia(message).document, null, !MessageObject.isSecretMedia(message) && MessageObject.getMedia(message).ttl_seconds != 0, useFileDatabaseQueue);
             } else if (MessageObject.getMedia(message) instanceof TLRPC.TL_messageMediaPhoto) {
                 ArrayList<TLRPC.PhotoSize> sizes = MessageObject.getMedia(message).photo.sizes;
                 if (sizes.size() > 0) {
                     TLRPC.PhotoSize sizeFull = getClosestPhotoSizeWithSize(sizes, AndroidUtilities.getPhotoSize(), false, null, true);
                     if (sizeFull != null) {
-                        return getPathToAttach(sizeFull, null, MessageObject.getMedia(message).ttl_seconds != 0, useFileDatabaseQueue);
+                        return getPathToAttach(sizeFull, null, !MessageObject.isSecretMedia(message) && MessageObject.getMedia(message).ttl_seconds != 0, useFileDatabaseQueue);
                     }
                 }
             } else if (MessageObject.getMedia(message) instanceof TLRPC.TL_messageMediaWebPage) {
@@ -1202,6 +1204,24 @@ public class FileLoader extends BaseController {
                 dir = getDirectory(MEDIA_DIR_CACHE);
             }
         }
+
+        // --- AyuGram hook
+        if (attach instanceof TLRPC.PhotoSize) {
+            var obj = (TLRPC.PhotoSize) attach;
+            if (obj.location instanceof AyuFileLocation) {
+                return new File(((AyuFileLocation) obj.location).path);
+            }
+        } else if (attach instanceof TLRPC.TL_videoSize) {
+            var obj = (TLRPC.TL_videoSize) attach;
+            if (obj.location instanceof AyuFileLocation) {
+                return new File(((AyuFileLocation) obj.location).path);
+            }
+        } else if (attach instanceof AyuFileLocation) {
+            var obj = (AyuFileLocation) attach;
+            return new File(obj.path);
+        }
+        // --- AyuGram hook
+
         if (dir == null) {
             return new File("");
         }

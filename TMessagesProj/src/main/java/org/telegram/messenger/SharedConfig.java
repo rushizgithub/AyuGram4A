@@ -24,6 +24,8 @@ import android.webkit.WebView;
 import androidx.annotation.IntDef;
 import androidx.core.content.pm.ShortcutManagerCompat;
 
+import com.radolyn.ayugram.AyuConstants;
+
 import org.json.JSONObject;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.SerializedData;
@@ -1279,10 +1281,10 @@ public class SharedConfig {
     public static void checkSaveToGalleryFiles() {
         Utilities.globalQueue.postRunnable(() -> {
             try {
-                File telegramPath = new File(Environment.getExternalStorageDirectory(), "exteraGram");
-                File imagePath = new File(telegramPath, "exteraGram Images");
+                File telegramPath = new File(Environment.getExternalStorageDirectory(), AyuConstants.APP_NAME);
+                File imagePath = new File(telegramPath, AyuConstants.APP_NAME + " Images");
                 imagePath.mkdir();
-                File videoPath = new File(telegramPath, "exteraGram Video");
+                File videoPath = new File(telegramPath, AyuConstants.APP_NAME + " Video");
                 videoPath.mkdir();
 
                 if (!BuildVars.NO_SCOPED_STORAGE) {

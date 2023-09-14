@@ -102,6 +102,9 @@
         tools:ignore="ScopedStorage" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
+    <!-- for tg://xiaomi -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+
     <queries>
         <package android:name="com.google.android.apps.maps" />
         <intent>
@@ -112,6 +115,7 @@
 
     <uses-sdk tools:overrideLibrary="androidx.camera.view, androidx.camera.extensions, androidx.camera.lifecycle, androidx.camera.camera2, androidx.camera.core" />
 
+    <!-- AyuGram: remove for release `usesCleartextTraffic` -->
     <application
         android:name=".ApplicationLoader"
         android:allowAudioPlaybackCapture="true"
@@ -127,6 +131,7 @@
         android:restoreAnyVersion="true"
         android:supportsRtl="false"
         android:theme="@style/Theme.TMessages.Start"
+        android:usesCleartextTraffic="true"
         tools:replace="android:supportsRtl">
         <meta-data
             android:name="com.google.android.maps.v2.API_KEY"

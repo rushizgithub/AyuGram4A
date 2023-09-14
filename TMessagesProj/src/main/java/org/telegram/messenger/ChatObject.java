@@ -17,6 +17,7 @@ import androidx.annotation.IntDef;
 import androidx.collection.LongSparseArray;
 
 import com.google.android.exoplayer2.util.Log;
+import com.radolyn.ayugram.AyuConfig;
 
 import org.telegram.messenger.voip.Instance;
 import org.telegram.messenger.voip.VoIPService;
@@ -1662,7 +1663,11 @@ public class ChatObject {
     }
 
     public static boolean isNotInChat(TLRPC.Chat chat) {
-        return chat == null || chat instanceof TLRPC.TL_chatEmpty || chat instanceof TLRPC.TL_chatForbidden || chat instanceof TLRPC.TL_channelForbidden || chat.left || chat.kicked || chat.deactivated;
+        if (!AyuConfig.saveDeletedMessages) {
+            return chat == null || chat instanceof TLRPC.TL_chatEmpty || chat instanceof TLRPC.TL_chatForbidden || chat instanceof TLRPC.TL_channelForbidden || chat.left || chat.kicked || chat.deactivated;
+        }
+
+        return chat == null || chat.left;
     }
 
     public static boolean canSendAsPeers(TLRPC.Chat chat) {

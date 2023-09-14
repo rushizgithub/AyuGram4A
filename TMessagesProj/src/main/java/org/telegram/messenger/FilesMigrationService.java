@@ -22,6 +22,8 @@ import android.widget.TextView;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
+import com.radolyn.ayugram.AyuConstants;
+
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.ActionBar.Theme;
@@ -96,8 +98,8 @@ public class FilesMigrationService extends Service {
         }
 
         File newPath = ApplicationLoader.applicationContext.getExternalFilesDir(null);
-        File telegramPath = new File(newPath, "exteraGram");
-        File oldPath = new File(path, "exteraGram");
+        File telegramPath = new File(newPath, AyuConstants.APP_NAME);
+        File oldPath = new File(path, AyuConstants.APP_NAME);
 
         totalFilesCount = getFilesCount(oldPath);
 
@@ -203,7 +205,7 @@ public class FilesMigrationService extends Service {
                     }
                 }
             }
-            File oldDirectory = new File(path, "exteraGram");
+            File oldDirectory = new File(path, AyuConstants.APP_NAME);
             hasOldFolder = oldDirectory.exists();
         }
         if (hasOldFolder) {

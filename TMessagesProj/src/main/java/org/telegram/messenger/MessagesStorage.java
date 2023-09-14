@@ -22,6 +22,10 @@ import android.util.SparseIntArray;
 import androidx.annotation.UiThread;
 import androidx.collection.LongSparseArray;
 
+import com.radolyn.ayugram.AyuConfig;
+import com.radolyn.ayugram.messages.AyuMessagesController;
+
+import com.radolyn.ayugram.messages.AyuSavePreferences;
 import org.telegram.PhoneFormat.PhoneFormat;
 import org.telegram.SQLite.SQLiteCursor;
 import org.telegram.SQLite.SQLiteDatabase;
@@ -295,7 +299,7 @@ public class MessagesStorage extends BaseController {
             database = new SQLiteDatabase(cacheFile.getPath());
             database.executeFast("PRAGMA secure_delete = ON").stepThis().dispose();
             database.executeFast("PRAGMA temp_store = MEMORY").stepThis().dispose();
-            database.executeFast("PRAGMA journal_mode = WAL").stepThis().dispose();
+            database.executeFast("PRAGMA journal_mode = " + AyuConfig.getWALMode()).stepThis().dispose();
             database.executeFast("PRAGMA journal_size_limit = 10485760").stepThis().dispose();
 
             if (createTable) {
@@ -413,7 +417,7 @@ public class MessagesStorage extends BaseController {
                 database = new SQLiteDatabase(cacheFile.getPath());
                 database.executeFast("PRAGMA secure_delete = ON").stepThis().dispose();
                 database.executeFast("PRAGMA temp_store = MEMORY").stepThis().dispose();
-                database.executeFast("PRAGMA journal_mode = WAL").stepThis().dispose();
+                database.executeFast("PRAGMA journal_mode = " + AyuConfig.getWALMode()).stepThis().dispose();
                 database.executeFast("PRAGMA journal_size_limit = 10485760").stepThis().dispose();
             } catch (SQLiteException e) {
                 FileLog.e(new Exception(e));
@@ -4254,6 +4258,14 @@ public class MessagesStorage extends BaseController {
                             if (!addFilesToDelete(message, filesToDelete, idsToDelete, namesToDelete, true)) {
                                 continue;
                             } else {
+                                // --- AyuGram hook
+                                if (AyuConfig.saveMessagesHistory) {
+                                    var prefs = new AyuSavePreferences(message, currentAccount);
+                                    prefs.setDialogId(dialogId);
+                                    AyuMessagesController.getInstance().onMessageEditedForce(prefs);
+                                }
+                                // --- AyuGram hook
+
                                 if (message.media.document != null) {
                                     message.media.document = new TLRPC.TL_documentEmpty();
                                 } else if (message.media.photo != null) {
@@ -8456,7 +8468,7 @@ public class MessagesStorage extends BaseController {
         //}
     }
 
-    private void getAnimatedEmoji(String join, ArrayList<TLRPC.Document> documents) {
+    public void getAnimatedEmoji(String join, ArrayList<TLRPC.Document> documents) {
         SQLiteCursor cursor = null;
         try {
             cursor = database.queryFinalized(String.format(Locale.US, "SELECT data FROM animated_emoji WHERE document_id IN (%s)", join));
@@ -11941,6 +11953,53 @@ public class MessagesStorage extends BaseController {
         });
     }
 
+    public LongSparseArray<ArrayList<Integer>> getMessageIdsByRandomIds(ArrayList<Long> randoms) {
+        if (randoms.isEmpty()) {
+            return new LongSparseArray<>();
+        }
+        SQLiteCursor cursor = null;
+        try {
+            String ids = TextUtils.join(",", randoms);
+            cursor = database.queryFinalized(String.format(Locale.US, "SELECT mid, uid FROM randoms_v2 WHERE random_id IN(%s)", ids));
+            LongSparseArray<ArrayList<Integer>> dialogs = new LongSparseArray<>();
+            while (cursor.next()) {
+                long dialogId = cursor.longValue(1);
+                ArrayList<Integer> mids = dialogs.get(dialogId);
+                if (mids == null) {
+                    mids = new ArrayList<>();
+                    dialogs.put(dialogId, mids);
+                }
+                mids.add(cursor.intValue(0));
+            }
+
+            return dialogs;
+        } catch (Exception e) {
+            checkSQLException(e);
+        } finally {
+            if (cursor != null) {
+                cursor.dispose();
+            }
+        }
+        return new LongSparseArray<>();
+    }
+
+    public Pair<Integer, Integer> getMinAndMaxForDialog(long dialogId) {
+        SQLiteCursor cursor = null;
+        try {
+            cursor = database.queryFinalized(String.format(Locale.US, "SELECT MIN(mid), MAX(mid) FROM messages_v2 WHERE uid = %d", dialogId));
+            if (cursor.next()) {
+                return new Pair<>(cursor.intValue(0), cursor.intValue(1));
+            }
+        } catch (Exception e) {
+            checkSQLException(e);
+        } finally {
+            if (cursor != null) {
+                cursor.dispose();
+            }
+        }
+        return new Pair<>(0, 0);
+    }
+
     protected void deletePushMessages(long dialogId, ArrayList<Integer> messages) {
         try {
             database.executeFast(String.format(Locale.US, "DELETE FROM unread_push_messages WHERE uid = %d AND mid IN(%s)", dialogId, TextUtils.join(",", messages))).stepThis().dispose();
@@ -13480,6 +13539,11 @@ public class MessagesStorage extends BaseController {
                                         sameMedia = oldMessage.media.photo.id == message.media.photo.id;
                                     } else if (oldMessage.media instanceof TLRPC.TL_messageMediaDocument && message.media instanceof TLRPC.TL_messageMediaDocument && oldMessage.media.document != null && message.media.document != null) {
                                         sameMedia = oldMessage.media.document.id == message.media.document.id;
+                                    }
+                                    if (message.from_id != null && (!oldMessage.message.equals(message.message) || !sameMedia)) {
+                                        var prefs = new AyuSavePreferences(oldMessage, currentAccount);
+                                        prefs.setDialogId(dialogId);
+                                        AyuMessagesController.getInstance().onMessageEdited(prefs, message);
                                     }
                                     if (!sameMedia) {
                                         addFilesToDelete(oldMessage, filesToDelete, idsToDelete, namesToDelete, false);
@@ -15686,6 +15750,28 @@ public class MessagesStorage extends BaseController {
                 }
             }
         });
+    }
+
+    public ArrayList<Long> getDialogIdsToUpdate(long dialogId, ArrayList<Integer> messages) {
+        try {
+            SQLiteCursor cursor;
+            String ids = TextUtils.join(",", messages);
+            var dialogsToUpdate = new HashSet<Long>();
+            if (dialogId != 0) {
+                cursor = database.queryFinalized(String.format(Locale.US, "SELECT uid, mid FROM messages_v2 WHERE mid IN(%s) AND uid = %d", ids, dialogId));
+            } else {
+                cursor = database.queryFinalized(String.format(Locale.US, "SELECT uid, mid FROM messages_v2 WHERE mid IN(%s) AND is_channel = 0", ids));
+            }
+            while (cursor.next()) {
+                long did = cursor.longValue(0);
+                dialogsToUpdate.add(did);
+            }
+            cursor.dispose();
+            return new ArrayList<>(dialogsToUpdate);
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+        return null;
     }
 
     private boolean isForum(long dialogId) {

@@ -23,6 +23,7 @@ public class BuildVars {
     public static boolean PM_BUILD = BuildConfig.IS_PM_BUILD;
     public static int BUILD_VERSION;
     public static String BUILD_VERSION_STRING;
+    public static String AYU_VERSION;
     public static int APP_ID;
     public static String APP_HASH;
 
@@ -38,6 +39,7 @@ public class BuildVars {
     static {
         BUILD_VERSION = BuildConfig.VERSION_CODE;
         BUILD_VERSION_STRING = BuildConfig.VERSION_NAME;
+        AYU_VERSION = BuildConfig.AYU_VERSION;
 
         // Obtain your own APP_ID at https://core.telegram.org/api/obtaining_api_id
         APP_ID = BuildConfig.APP_ID;

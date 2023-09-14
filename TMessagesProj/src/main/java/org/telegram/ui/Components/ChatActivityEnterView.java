@@ -109,6 +109,8 @@ import com.exteragram.messenger.boost.encryption.EncryptionHelper;
 import com.exteragram.messenger.utils.ChatUtils;
 import com.exteragram.messenger.utils.PopupUtils;
 import com.exteragram.messenger.utils.TranslatorUtils;
+import com.radolyn.ayugram.AyuConfig;
+import com.radolyn.ayugram.utils.AyuState;
 
 import org.telegram.messenger.AccountInstance;
 import org.telegram.messenger.AndroidUtilities;
@@ -7832,7 +7834,7 @@ public class ChatActivityEnterView extends BlurredFrameLayout implements Notific
             defPeer = delegate.getSendAsPeers().peers.get(0).peer;
         }
         boolean isVisible = defPeer != null && (delegate.getSendAsPeers() == null || delegate.getSendAsPeers().peers.size() > 1) &&
-            !isEditingMessage() && !isRecordingAudioVideo() && UserConfig.getInstance(currentAccount).isPremium() && (recordedAudioPanel == null || recordedAudioPanel.getVisibility() != View.VISIBLE);
+            !isEditingMessage() && !isRecordingAudioVideo() && (recordedAudioPanel == null || recordedAudioPanel.getVisibility() != View.VISIBLE);
         if (isVisible) {
             createSenderSelectView();
         }

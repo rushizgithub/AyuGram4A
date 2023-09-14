@@ -27,6 +27,7 @@ import androidx.core.content.FileProvider;
 
 import com.exteragram.messenger.ExteraConfig;
 import com.exteragram.messenger.preferences.updater.UpdaterBottomSheet;
+import com.radolyn.ayugram.AyuConstants;
 
 import org.json.JSONObject;
 import org.telegram.messenger.AndroidUtilities;
@@ -55,7 +56,7 @@ public class UpdaterUtils {
 
     public static final DispatchQueue otaQueue = new DispatchQueue("otaQueue");
 
-    private static String uri = "https://api.github.com/repos/exteraSquad/exteraGram/releases/latest";
+    private static String uri = "https://api.github.com/repos/" + AyuConstants.APP_GITHUB + "/releases/latest";
     private static String downloadURL = null;
     public static String version, changelog, size, uploadDate;
     public static File otaPath, versionPath, apkFile;
@@ -103,7 +104,7 @@ public class UpdaterUtils {
             ExteraConfig.editor.putLong("lastUpdateCheckTime", ExteraConfig.lastUpdateCheckTime = System.currentTimeMillis()).apply();
             try {
                 if (BuildVars.isBetaApp())
-                    uri = uri.replace("/exteraGram/", "/exteraGram-Beta/");
+                    uri = uri.replace("/" + AyuConstants.APP_NAME + "/", "/" + AyuConstants.APP_NAME + "-Beta/");
                 var connection = (HttpURLConnection) new URI(uri).toURL().openConnection();
                 connection.setRequestMethod("GET");
                 connection.setRequestProperty("User-Agent", TranslatorUtils.formatUserAgent());
@@ -141,11 +142,11 @@ public class UpdaterUtils {
                 changelog = obj.getString("body");
                 uploadDate = obj.getString("published_at").replaceAll("[TZ]", " ");
                 uploadDate = LocaleController.formatDateTime(getMillisFromDate(uploadDate, "yyyy-M-dd hh:mm:ss") / 1000);
-
-                if (isNewVersion(BuildVars.BUILD_VERSION_STRING, version) && fragment != null) {
+                Update update = new Update(version, changelog, size, downloadURL, uploadDate);
+                if (update.isNew() && fragment != null) {
                     checkDirs();
                     AndroidUtilities.runOnUIThread(() -> {
-                        (new UpdaterBottomSheet(fragment.getContext(), fragment, true, version, changelog, size, downloadURL, uploadDate)).show();
+                        (new UpdaterBottomSheet(fragment.getContext(), fragment, true, update)).show();
                         if (onUpdateFound != null)
                             onUpdateFound.run();
                     });
@@ -204,23 +205,6 @@ public class UpdaterUtils {
                 context.startActivity(install);
             }
         }
-    }
-
-    public static boolean isNewVersion(String currentVersion, String newVersion) {
-        String[] current = currentVersion.split("\\.");
-        String[] latest = newVersion.split("\\.");
-
-        int length = Math.max(current.length, latest.length);
-        for (int i = 0; i < length; i++) {
-            int v1 = i < current.length ? Utilities.parseInt(current[i]) : 0;
-            int v2 = i < latest.length ? Utilities.parseInt(latest[i]) : 0;
-            if (v1 < v2) {
-                return true;
-            } else if (v1 > v2) {
-                return false;
-            }
-        }
-        return false;
     }
 
     public static String getOtaDirSize() {
@@ -354,6 +338,41 @@ public class UpdaterUtils {
                     FileLog.e(e);
                 }
             }
+        }
+    }
+
+    public static class Update {
+        public final String version, size, downloadURL, uploadDate, changelog;
+
+        public Update(String version, String changelog, String size, String downloadURL, String uploadDate) {
+            this.version = version;
+            this.changelog = changelog;
+            this.size = size;
+            this.downloadURL = downloadURL;
+            this.uploadDate = uploadDate;
+        }
+
+        // todo: compare by version code, not version
+        public boolean isNew() {
+            String[] current = BuildVars.BUILD_VERSION_STRING.split("\\.");
+            String[] latest = version.split("\\.");
+
+            int length = Math.max(current.length, latest.length);
+            for (int i = 0; i < length; i++) {
+                int v1 = i < current.length ? Utilities.parseInt(current[i]) : 0;
+                int v2 = i < latest.length ? Utilities.parseInt(latest[i]) : 0;
+                if (v1 < v2) {
+                    return true;
+                } else if (v1 > v2) {
+                    return false;
+                }
+            }
+            return false;
+        }
+
+        // todo: force update
+        public boolean isForce() {
+            return version.toLowerCase().contains("force");
         }
     }
 }

@@ -1,45 +1,139 @@
-<img src="https://i.imgur.com/5EmxevP.png" width="150" align="left"/>
+# AyuGram for Android
 
-## exteraGram
-*[Licensed under the GNU General Public License v2.0](https://github.com/exteraSquad/exteraGram/blob/default/LICENSE)*
+![AyuGram Logo](.github/AyuGram.png)
 
-Experimental **third-party** Telegram client based on [official sources](https://github.com/DrKLO/Telegram).
+## What's this fork even about?
 
-[![Channel](https://img.shields.io/badge/Channel-Telegram-blue.svg)](https://t.me/exteragram)
-[![Chat](https://img.shields.io/badge/Chat-Telegram-blue.svg)](https://t.me/exteraChat)
-[![Downloads](https://img.shields.io/badge/Download%20at%20-%20Telegram-blue.svg)](https://t.me/exterareleases)
+**Is it just exteraGram+Telegraher?**
 
-## Importing API hash and keys
-- You should get **YOUR OWN API KEY AND HASH** here: https://core.telegram.org/api/obtaining_api_id and create a file called `API_KEYS` in the source root directory.
-- Also you should get **YOUR OWN MAPS API KEY** here: https://console.cloud.google.com/google/maps-apis/credentials and add it to this file.
-- And you need to generate **SIGNING KEY**: https://developer.android.com/studio/publish/app-signing#generate-key
-The contents should look like this:
-```
-APP_ID = 123456
-APP_HASH = abcdef0123456789 (32 chars)
-MAPS_V2_API = abcdef01234567-abcdef012345678910111213
+**AyuGram4A** is a fork of [exteraGram](https://github.com/exteraSquad/exteraGram) with
+some patches from [Telegraher](https://github.com/nikitasius/Telegraher).
 
-SIGNING_KEY_PASSWORD = A1BcDEFHJ2KLMn3oP
-SIGNING_KEY_ALIAS = abcdefghjklm
-SIGNING_KEY_STORE_PASSWORD = Z9yXDEFHJ6KRqn7oP
-```
+But it's not just exteraGram with Telegraher's commits, **it's a fully reworked version**.
 
-## Compilation Guide
-1. Clone exteraGram's source code using `git clone https://github.com/exteraSquad/exteraGram/`
-2. Fill out values in `API_KEYS` like [here](https://github.com/exteraSquad/exteraGram#importing-api-hash-and-keys)
-3. Open the project in Android Studio. It should be opened, **not imported**
-4. You are ready to compile `exteraGram`
+The main difference between AyuGram and Telegraher is that AyuGram **saves** your messages history,
+while Telegraher just **caches** them.
+It means that you can clean your cache and still have all saved messages.
 
-- **exteraGram** can be built with **Android Studio** or from the command line with **Gradle**:
+Also, AyuGram has **full ghost mode**.
+It allows you to hide your online status from other users, even if you send them
+a message.
+
+*And, well, it's not an Iranian Telegram fork with floating TV or something.*
+
+## Features list
+
+### Telegraher's patches:
+
+- Built with official keys
+- Screenshots in secret chats
+- No emulator detection
+- No ads
+
+### Reworked Telegraher's patches:
+
+- Save chats where you were banned/kicked
+- Expire button for TTL photos/videos
+- ...something else probably
+
+### Our features:
+
+- Full ghost mode (flexible)
+- Messages history (flexible)
+- Message filters (e.g. hide ads)
+- Customizable edited/deleted marks
+- Local Telegram Premium
+- Sync read states and message history with AyuSync
+- Up to stream Telegram version (*snidely*)
+
+Note that we use **Crashlytics**.
+If you don't want to send crash reports, you can disable it in **exteraGram Preferences**.
+
+**AyuGram4A** does **NOT** include proprietary **exteraGram** features.
+
+## Preview
+
+💖 **Made with extera's Monet theme.**
+
+<img src='.github/demos/demo1.png' width='210'> <img src='.github/demos/demo2.png' width='210'>
+
+<img src='.github/demos/demo3.png' width='210'> <img src='.github/demos/demo4.png' width='210'>
+
+<img src='.github/demos/demo5.png' width='210'> <img src='.github/demos/demo6.png' width='210'>
+
+## Downloads?
+
+Follow our **[Telegram channel](https://t.me/ayugram1338)** and join our [chat](https://t.me/ayugramchat)!
+
+Preview versions can be downloaded
+from the **[dedicated topic](https://t.me/ayugramchat/1238)**.
+
+## Want to throw some money?
+
+Developing AyuGram is not such a simple task.
+**We'd be grateful for any donation <3**
+
+All available methods can be found **[here](https://ayusync.cloud/ui/donate)**.
+
+## AyuSync? What is it?
+
+**AyuSync** is our synchronization service.
+You can either use official server or host your own.
+It can sync read states and message history.
+
+Server backend can be found **[here](https://github.com/AyuGram/AyuSyncBackend)**.
+
+## Want to contribute?
+
+I'd be grateful for any contribution, since I don't really like Java. :)
+
+**Work on any feature you want.**
+
+## Want to fork?
+
+Well, just fork it.
+
+**But please, don't forget to mention us in your README.**
+
+## How to build
+
+1. Clone source code using `git clone https://github.com/AyuGram/AyuGram4A.git`
+2. Open the project in Android Studio. It should be opened, **not imported**
+3. Implement the `AyuMessageUtils` & `AyuHistoryHook` classes. It's not that hard, but if you're
+   making your **very** own fork, then you should take some time to write this part of code. Or you can search for a reversed version :)
+4. Replace `google-services.json` (we don't want to see crash reports from your app...)
+5. Generate application certificate and fill API_KEYS:
+   ```
+   APP_ID = 6
+   APP_HASH = "eb06d4abfb49dc3eeb1aeb98ae0f581e"
+   MAPS_V2_API = abcdef12345678
+   
+   SIGNING_KEY_PASSWORD = password
+   SIGNING_KEY_ALIAS = alias
+   SIGNING_KEY_STORE_PASSWORD = password
+   ```
+6. You are ready to compile `AyuGram`
+
+- **AyuGram** can be built with **Android Studio** or from the command line with **Gradle**:
+
 ```
 ./gradlew assembleAfatRelease
 ```
 
-## exteraGram Localization
-Since **exteraGram** is a fork of **Telegram for Android** and most localizations follow translations of **Telegram for Android**, check it out [here](https://translations.telegram.org/en/android/). As for specialized strings for **exteraGram**, we use **Crowdin** to translate **exteraGram**. Join the project at [Crowdin](https://crowdin.com/project/exteralocales)!
+## AyuGram Localization
 
- ## Thanks to:
-- [Telegram](https://github.com/DrKLO/Telegram)
-- [Catogram](https://github.com/Catogram/Catogram) and [Catogram X](https://github.com/CatogramX/CatogramX)
-- [Nekogram](https://gitlab.com/Nekogram/Nekogram) and [Nekogram X](https://github.com/NekoX-Dev/NekoX)
-- [OwlGram](https://github.com/OwlGramDev/OwlGram)
+[![Crowdin](https://badges.crowdin.net/ayugram/localized.svg)](https://crowdin.com/project/ayugram)
+[![Crowdin](https://badges.crowdin.net/exteralocales/localized.svg)](https://crowdin.com/project/exteralocales)
+
+We have our own **[Crowdin](https://crowdin.com/project/ayugram)**.
+
+But since **AyuGram** is based on **exteraGram**, also join their project
+at **[Crowdin](https://crowdin.com/project/exteralocales)**!
+
+## Credits
+
+- **[exteraGram](https://github.com/exteraSquad/exteraGram)**
+- [Telegraher](https://github.com/nikitasius/Telegraher)
+- [Cherrygram](https://github.com/arsLan4k1390/Cherrygram)
+- [Nagram](https://github.com/NextAlone/Nagram)
+- [Telegram FOSS](https://github.com/Telegram-FOSS-Team/Telegram-FOSS)

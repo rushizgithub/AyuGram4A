@@ -3,15 +3,17 @@ package org.telegram.tgnet;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.SharedPreferences;
-import android.content.pm.PackageInfo;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Base64;
-import android.util.Log;
 
-import com.google.firebase.remoteconfig.FirebaseRemoteConfig;
+import com.radolyn.ayugram.AyuConfig;
+import com.radolyn.ayugram.AyuConstants;
+import com.radolyn.ayugram.sync.AyuSyncController;
+import com.radolyn.ayugram.utils.AyuGhostUtils;
+import com.radolyn.ayugram.utils.AyuState;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -40,7 +42,6 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
-import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
@@ -57,8 +58,6 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import javax.net.ssl.SSLException;
 
 public class ConnectionsManager extends BaseController {
 
@@ -189,13 +188,7 @@ public class ConnectionsManager extends BaseController {
             systemLangCode = LocaleController.getSystemLocaleStringIso639().toLowerCase();
             langCode = LocaleController.getLocaleStringIso639().toLowerCase();
             deviceModel = Build.MANUFACTURER + Build.MODEL;
-            PackageInfo pInfo = ApplicationLoader.applicationContext.getPackageManager().getPackageInfo(ApplicationLoader.applicationContext.getPackageName(), 0);
-            appVersion = pInfo.versionName + " (" + pInfo.versionCode + ")";
-            if (BuildVars.DEBUG_PRIVATE_VERSION) {
-                appVersion += " pbeta";
-            } else if (BuildVars.DEBUG_VERSION) {
-                appVersion += " beta";
-            }
+            appVersion = BuildVars.BUILD_VERSION_STRING + " (" + BuildVars.BUILD_VERSION + ")";
             systemVersion = "SDK " + Build.VERSION.SDK_INT;
         } catch (Exception e) {
             systemLangCode = "en";
@@ -306,10 +299,102 @@ public class ConnectionsManager extends BaseController {
         return requestToken;
     }
 
-    private void sendRequestInternal(TLObject object, RequestDelegate onComplete, RequestDelegateTimestamp onCompleteTimestamp, QuickAckDelegate onQuickAck, WriteToSocketDelegate onWriteToSocket, int flags, int datacenterId, int connetionType, boolean immediate, int requestToken) {
+    private void sendRequestInternal(TLObject object, RequestDelegate onCompleteOrig, RequestDelegateTimestamp onCompleteTimestamp, QuickAckDelegate onQuickAck, WriteToSocketDelegate onWriteToSocket, int flags, int datacenterId, int connetionType, boolean immediate, int requestToken) {
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d("send request " + object + " with token = " + requestToken);
         }
+
+        // --- AyuGram request hook
+        {
+            // don't send upload & typing status
+            if (!AyuConfig.sendUploadProgress &&
+                    (
+                            object instanceof TLRPC.TL_messages_setTyping ||
+                            object instanceof TLRPC.TL_messages_setEncryptedTyping
+                    )
+            ) {
+                // no need to run `onComplete`
+                return;
+            }
+
+            // don't send online status
+            if (!AyuConfig.sendOnlinePackets && object instanceof TLRPC.TL_account_updateStatus) {
+                var obj = ((TLRPC.TL_account_updateStatus) object);
+                obj.offline = true;
+            }
+
+            // don't send read status
+            if (
+                    !AyuConfig.sendReadPackets &&
+                            (
+                                    object instanceof TLRPC.TL_messages_readHistory ||
+                                    object instanceof TLRPC.TL_messages_readEncryptedHistory ||
+                                    object instanceof TLRPC.TL_messages_readDiscussion ||
+                                    object instanceof TLRPC.TL_messages_readMessageContents ||
+                                    object instanceof TLRPC.TL_channels_readHistory ||
+                                    object instanceof TLRPC.TL_channels_readMessageContents
+                            )
+            ) {
+                if (!AyuState.getAllowReadPacket()) {
+                    var fakeRes = new TLRPC.TL_messages_affectedMessages();
+                    // IDK if this should be -1 or what, check `TL_messages_readMessageContents` usages
+                    fakeRes.pts = -1;
+                    fakeRes.pts_count = 0;
+
+                    try {
+                        if (onCompleteOrig != null) {
+                            onCompleteOrig.run(fakeRes, null);
+                        }
+                    } catch (Exception e) {
+                        FileLog.e(e);
+                    }
+
+                    var pair = AyuGhostUtils.getDialogIdAndMessageIdFromRequest(object);
+                    if (pair != null) {
+                        AyuSyncController.getInstance().syncRead(currentAccount, pair.first, pair.second);
+                    }
+
+                    return;
+                }
+            }
+
+            // mark messages as read after sending a message
+            if (AyuConfig.markReadAfterSend && !AyuConfig.sendReadPackets) {
+                TLRPC.InputPeer peer = null;
+                if (object instanceof TLRPC.TL_messages_sendMessage) {
+                    var obj = ((TLRPC.TL_messages_sendMessage) object);
+                    peer = obj.peer;
+                } else if (object instanceof TLRPC.TL_messages_sendMedia) {
+                    var obj = ((TLRPC.TL_messages_sendMedia) object);
+                    peer = obj.peer;
+                } else if (object instanceof TLRPC.TL_messages_sendMultiMedia) {
+                    var obj = ((TLRPC.TL_messages_sendMultiMedia) object);
+                    peer = obj.peer;
+                }
+
+                if (peer != null) {
+                    var dialogId = AyuGhostUtils.getDialogId(peer);
+
+                    var origOnComplete = onCompleteOrig;
+                    TLRPC.InputPeer finalPeer = peer;
+                    onCompleteOrig = (response, error) -> {
+                        origOnComplete.run(response, error);
+
+                        getMessagesStorage().getDialogMaxMessageId(dialogId, maxId -> {
+                            TLRPC.TL_messages_readHistory request = new TLRPC.TL_messages_readHistory();
+                            request.peer = finalPeer;
+                            request.max_id = maxId;
+
+                            AyuState.setAllowReadPacket(true, 1);
+                            sendRequest(request, (a1, a2) -> {});
+                        });
+                    };
+                }
+            }
+        }
+        final var onComplete = onCompleteOrig;
+        // --- AyuGram request hook
+
         try {
             NativeByteBuffer buffer = new NativeByteBuffer(object.getObjectSize());
             object.serializeToStream(buffer);
@@ -442,7 +527,7 @@ public class ConnectionsManager extends BaseController {
         }
         String installer = "";
         try {
-            installer = ApplicationLoader.applicationContext.getPackageManager().getInstallerPackageName(ApplicationLoader.applicationContext.getPackageName());
+            installer = AyuConstants.BUILD_STORE_PACKAGE;
         } catch (Throwable ignore) {
 
         }
@@ -451,7 +536,7 @@ public class ConnectionsManager extends BaseController {
         }
         String packageId = "";
         try {
-            packageId = ApplicationLoader.applicationContext.getPackageName();
+            packageId = AyuConstants.BUILD_ORIGINAL_PACKAGE;
         } catch (Throwable ignore) {
 
         }
@@ -1359,7 +1444,6 @@ public class ConnectionsManager extends BaseController {
     private static class FirebaseTask extends AsyncTask<Void, Void, NativeByteBuffer> {
 
         private int currentAccount;
-        private FirebaseRemoteConfig firebaseRemoteConfig;
 
         public FirebaseTask(int instance) {
             super();
@@ -1367,58 +1451,15 @@ public class ConnectionsManager extends BaseController {
         }
 
         protected NativeByteBuffer doInBackground(Void... voids) {
-            try {
-                if (native_isTestBackend(currentAccount) != 0) {
-                    throw new Exception("test backend");
-                }
-                firebaseRemoteConfig = FirebaseRemoteConfig.getInstance();
-                String currentValue = firebaseRemoteConfig.getString("ipconfigv3");
+            Utilities.stageQueue.postRunnable(() -> {
                 if (BuildVars.LOGS_ENABLED) {
-                    FileLog.d("current firebase value = " + currentValue);
+                    FileLog.d("failed to get firebase result");
+                    FileLog.d("start dns txt task");
                 }
-
-                firebaseRemoteConfig.fetch(0).addOnCompleteListener(finishedTask -> {
-                    final boolean success = finishedTask.isSuccessful();
-                    Utilities.stageQueue.postRunnable(() -> {
-                        if (success) {
-                            firebaseRemoteConfig.activate().addOnCompleteListener(finishedTask2 -> {
-                                currentTask = null;
-                                String config = firebaseRemoteConfig.getString("ipconfigv3");
-                                if (!TextUtils.isEmpty(config)) {
-                                    byte[] bytes = Base64.decode(config, Base64.DEFAULT);
-                                    try {
-                                        NativeByteBuffer buffer = new NativeByteBuffer(bytes.length);
-                                        buffer.writeBytes(bytes);
-                                        int date = (int) (firebaseRemoteConfig.getInfo().getFetchTimeMillis() / 1000);
-                                        native_applyDnsConfig(currentAccount, buffer.address, AccountInstance.getInstance(currentAccount).getUserConfig().getClientPhone(), date);
-                                    } catch (Exception e) {
-                                        FileLog.e(e);
-                                    }
-                                } else {
-                                    if (BuildVars.LOGS_ENABLED) {
-                                        FileLog.d("failed to get firebase result");
-                                        FileLog.d("start dns txt task");
-                                    }
-                                    DnsTxtLoadTask task = new DnsTxtLoadTask(currentAccount);
-                                    task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, null, null, null);
-                                    currentTask = task;
-                                }
-                            });
-                        }
-                    });
-                });
-            } catch (Throwable e) {
-                Utilities.stageQueue.postRunnable(() -> {
-                    if (BuildVars.LOGS_ENABLED) {
-                        FileLog.d("failed to get firebase result");
-                        FileLog.d("start dns txt task");
-                    }
-                    DnsTxtLoadTask task = new DnsTxtLoadTask(currentAccount);
-                    task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, null, null, null);
-                    currentTask = task;
-                });
-                FileLog.e(e);
-            }
+                DnsTxtLoadTask task = new DnsTxtLoadTask(currentAccount);
+                task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, null, null, null);
+                currentTask = task;
+            });
             return null;
         }
 

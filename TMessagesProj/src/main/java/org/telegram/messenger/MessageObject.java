@@ -27,12 +27,12 @@ import android.text.style.ClickableSpan;
 import android.text.style.URLSpan;
 import android.text.util.Linkify;
 import android.util.Base64;
-import android.util.Log;
 
 import androidx.collection.LongSparseArray;
 
 import com.exteragram.messenger.boost.encryption.BaseEncryptor;
-import com.exteragram.messenger.boost.filter.ZalgoFilter;
+import com.radolyn.ayugram.AyuConfig;
+import com.radolyn.ayugram.AyuConstants;
 
 import org.telegram.PhoneFormat.PhoneFormat;
 import org.telegram.messenger.browser.Browser;
@@ -3891,7 +3891,7 @@ public class MessageObject {
                 } else if (getMedia(messageOwner) instanceof TLRPC.TL_messageMediaInvoice) {
                     messageText = getMedia(messageOwner).description;
                 } else if (getMedia(messageOwner) instanceof TLRPC.TL_messageMediaUnsupported) {
-                    messageText = LocaleController.getString("UnsupportedMedia", R.string.UnsupportedMedia).replace("https://telegram.org/update", "https://github.com/exteraSquad/exteraGram/releases/latest").replace("Telegram", "exteraGram");
+                    messageText = LocaleController.getString("UnsupportedMedia", R.string.UnsupportedMedia).replace("https://telegram.org/update", "https://github.com/" + AyuConstants.APP_GITHUB + "/releases/latest").replace("Telegram", AyuConstants.APP_NAME);
                 } else if (getMedia(messageOwner) instanceof TLRPC.TL_messageMediaDocument) {
                     if (isSticker() || isAnimatedStickerDocument(getDocument(), true)) {
                         String sch = getStickerChar();
@@ -5939,6 +5939,11 @@ public class MessageObject {
     }
 
     public static boolean shouldEncryptPhotoOrVideo(TLRPC.Message message) {
+        // AyuGram: disable encryption
+        if (true) {
+            return false;
+        }
+
         if (message instanceof TLRPC.TL_message_secret) {
             return (getMedia(message) instanceof TLRPC.TL_messageMediaPhoto || isVideoMessage(message)) && message.ttl > 0 && message.ttl <= 60;
         } else {
@@ -5969,6 +5974,14 @@ public class MessageObject {
     }
 
     public boolean needDrawBluredPreview() {
+        return needDrawBluredPreview(!AyuConfig.saveDeletedMessages);
+    }
+
+    public boolean needDrawBluredPreview(boolean really) {
+        if (!really) {
+            return false;
+        }
+
         if (hasExtendedMediaPreview()) {
             return true;
         } else if (messageOwner instanceof TLRPC.TL_message_secret) {
@@ -7378,7 +7391,7 @@ public class MessageObject {
             TLRPC.PhotoSize currentPhotoObject = FileLoader.getClosestPhotoSizeWithSize(photoThumbs, AndroidUtilities.getPhotoSize());
             if (currentPhotoObject != null) {
                 File file = FileLoader.getInstance(currentAccount).getPathToMessage(messageOwner, useFileDatabaseQueue);
-                if (needDrawBluredPreview()) {
+                if (needDrawBluredPreview(true)) {
                     mediaExists = new File(file.getAbsolutePath() + ".enc").exists();
                 }
                 if (!mediaExists) {
@@ -7393,7 +7406,7 @@ public class MessageObject {
             }
             if (!attachPathExists) {
                 File file = FileLoader.getInstance(currentAccount).getPathToMessage(messageOwner, useFileDatabaseQueue);
-                if (type == TYPE_VIDEO && needDrawBluredPreview()) {
+                if (type == TYPE_VIDEO && needDrawBluredPreview(true)) {
                     mediaExists = new File(file.getAbsolutePath() + ".enc").exists();
                 }
                 if (!mediaExists) {

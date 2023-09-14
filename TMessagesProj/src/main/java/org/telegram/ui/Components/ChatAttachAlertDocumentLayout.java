@@ -44,6 +44,8 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.LinearSmoothScroller;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.radolyn.ayugram.AyuConstants;
+
 import org.telegram.messenger.AccountInstance;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.AnimationNotificationsLocker;
@@ -950,7 +952,7 @@ public class ChatAttachAlertDocumentLayout extends ChatAttachAlert.AttachAlertLa
         if (files != null) {
             for (int a = 0; a < files.length; a++) {
                 File file = files[a];
-                if (file.isDirectory() && file.getName().equals("exteraGram")) {
+                if (file.isDirectory() && file.getName().equals(AyuConstants.APP_NAME)) {
                     checkDirectory(file);
                     continue;
                 }
@@ -1315,7 +1317,7 @@ public class ChatAttachAlertDocumentLayout extends ChatAttachAlert.AttachAlertLa
 
         ListItem fs;
         try {
-            File telegramPath = new File(ApplicationLoader.applicationContext.getExternalFilesDir(null), "exteraGram");
+            File telegramPath = new File(ApplicationLoader.applicationContext.getExternalFilesDir(null), AyuConstants.APP_NAME);
             if (telegramPath.exists()) {
                 fs = new ListItem();
                 fs.title = LocaleController.getString("AppName", R.string.AppName);

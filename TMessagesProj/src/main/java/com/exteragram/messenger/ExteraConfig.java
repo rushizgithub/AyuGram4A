@@ -20,6 +20,7 @@ import com.exteragram.messenger.camera.CameraXUtils;
 import com.exteragram.messenger.icons.BaseIconSet;
 import com.exteragram.messenger.icons.EmptyIconSet;
 import com.exteragram.messenger.icons.SolarIconSet;
+import com.radolyn.ayugram.AyuConstants;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
@@ -171,7 +172,7 @@ public class ExteraConfig {
             uploadSpeedBoost = preferences.getBoolean("uploadSpeedBoost", false);
 
             hidePhoneNumber = preferences.getBoolean("hidePhoneNumber", false);
-            showIdAndDc = preferences.getInt("showIdAndDc", 1);
+            showIdAndDc = preferences.getInt("showIdAndDc", 2);
 
             archiveOnPull = preferences.getBoolean("archiveOnPull", false);
             disableUnarchiveSwipe = preferences.getBoolean("disableUnarchiveSwipe", true);
@@ -183,13 +184,13 @@ public class ExteraConfig {
             centerTitle = preferences.getBoolean("centerTitle", false);
             tabCounter = preferences.getBoolean("tabCounter", true);
             tabIcons = preferences.getInt("tabIcons", 1);
-            tabStyle = preferences.getInt("tabStyle", 1);
-            titleText = preferences.getInt("titleText", 0);
+            tabStyle = preferences.getInt("tabStyle", 4);
+            titleText = preferences.getInt("titleText", 2);
 
             useSolarIcons = preferences.getBoolean("useSolarIcons", true);
 
             squareFab = preferences.getBoolean("squareFab", true);
-            forceBlur = preferences.getBoolean("forceBlur", false);
+            forceBlur = preferences.getBoolean("forceBlur", true);
             forceSnow = preferences.getBoolean("forceSnow", false);
             useSystemFonts = preferences.getBoolean("useSystemFonts", true);
             newSwitchStyle = preferences.getBoolean("newSwitchStyle", true);
@@ -239,9 +240,9 @@ public class ExteraConfig {
 
             addCommaAfterMention = preferences.getBoolean("addCommaAfterMention", true);
 
-            sendPhotosQuality = preferences.getInt("sendPhotosQuality", 1);
-            hidePhotoCounter = preferences.getBoolean("hidePhotoCounter", false);
-            hideCameraTile = preferences.getBoolean("hideCameraTile", false);
+            sendPhotosQuality = preferences.getInt("sendPhotosQuality", 2);
+            hidePhotoCounter = preferences.getBoolean("hidePhotoCounter", true);
+            hideCameraTile = preferences.getBoolean("hideCameraTile", true);
 
             staticZoom = preferences.getBoolean("staticZoom", false);
             videoMessagesCamera = preferences.getInt("videoMessagesCamera", 0);
@@ -267,11 +268,11 @@ public class ExteraConfig {
     }
 
     public static boolean isExtera(@NonNull TLRPC.Chat chat) {
-        return Arrays.stream(OFFICIAL_CHANNELS).anyMatch(id -> id == chat.id);
+        return Arrays.stream(OFFICIAL_CHANNELS).anyMatch(id -> id == chat.id) || Arrays.stream(AyuConstants.OFFICIAL_CHANNELS).anyMatch(id -> id == chat.id);
     }
 
     public static boolean isExteraDev(@NonNull TLRPC.User user) {
-        return Arrays.stream(DEVS).anyMatch(id -> id == user.id);
+        return Arrays.stream(DEVS).anyMatch(id -> id == user.id) || Arrays.stream(AyuConstants.DEVS).anyMatch(id -> id == user.id);
     }
 
     public static int getAvatarCorners(float size) {

@@ -20,6 +20,7 @@ import android.util.SparseArray;
 import androidx.annotation.NonNull;
 import androidx.collection.LongSparseArray;
 
+import com.radolyn.ayugram.AyuFilter;
 import org.telegram.SQLite.SQLiteCursor;
 import org.telegram.SQLite.SQLitePreparedStatement;
 import org.telegram.tgnet.NativeByteBuffer;
@@ -611,6 +612,16 @@ public class DownloadController extends BaseController implements NotificationCe
         if (message == null) {
             return 0;
         }
+
+        // --- AyuGram hook
+
+        var isFiltered = AyuFilter.isFiltered(new MessageObject(currentAccount, message, false, false), null);
+        if (isFiltered) {
+            return 0;
+        }
+
+        // --- AyuGram hook
+
         int type;
         boolean isVideo;
         if ((isVideo = MessageObject.isVideoMessage(message)) || MessageObject.isGifMessage(message) || MessageObject.isRoundVideoMessage(message) || MessageObject.isGameMessage(message)) {

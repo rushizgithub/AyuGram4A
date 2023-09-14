@@ -26,18 +26,15 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
-import android.util.Base64;
-import android.util.Log;
-import android.util.Pair;
-import android.util.SparseArray;
-import android.util.SparseBooleanArray;
-import android.util.SparseIntArray;
+import android.util.*;
 
 import androidx.collection.LongSparseArray;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.util.Consumer;
 
+import com.radolyn.ayugram.messages.AyuSavePreferences;
+import com.radolyn.ayugram.utils.AyuState;
 import org.telegram.SQLite.SQLiteCursor;
 import org.telegram.SQLite.SQLiteDatabase;
 import org.telegram.SQLite.SQLiteException;
@@ -89,7 +86,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 
-import com.exteragram.messenger.ExteraConfig;
+import com.radolyn.ayugram.AyuConfig;
+import com.radolyn.ayugram.AyuConstants;
+import com.radolyn.ayugram.messages.AyuMessagesController;
 
 public class MessagesController extends BaseController implements NotificationCenter.NotificationCenterDelegate {
 
@@ -644,7 +643,7 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public boolean isPremiumUser(TLRPC.User currentUser) {
-        return !premiumLocked && currentUser.premium;
+        return !premiumLocked && (currentUser.premium || currentUser.id == getUserConfig().getClientUserId() && AyuConfig.localPremium);
     }
 
     public boolean didPressTranscribeButtonEnough() {
@@ -6105,6 +6104,73 @@ public class MessagesController extends BaseController implements NotificationCe
         if ((messages == null || messages.isEmpty()) && taskId == 0) {
             return;
         }
+
+        // --- AyuGram hook
+        if (!scheduled && AyuConfig.saveDeletedMessages) {
+            if (DialogObject.isEncryptedDialog(dialogId) && messages != null && !messages.isEmpty()) { // process TTL messages from secrets
+                for (int a = 0; a < messages.size(); a++) {
+                    int id = messages.get(a);
+
+                    if (AyuState.isDeletePermitted(dialogId, id)) {
+                        continue;
+                    }
+
+                    MessageObject obj = dialogMessagesByIds.get(id);
+                    if (obj == null) {
+                        var msg = getMessagesStorage().getMessage(dialogId, id);
+                        if (msg != null) {
+                            obj = new MessageObject(currentAccount, msg, false, false);
+                        }
+                    }
+
+                    if (obj != null) {
+                        var prefs = new AyuSavePreferences(obj.messageOwner, currentAccount);
+                        prefs.setDialogId(dialogId);
+                        AyuMessagesController.getInstance().onMessageDeleted(prefs);
+                    }
+                }
+
+                AndroidUtilities.runOnUIThread(() -> {
+                    // invalidating views
+                    getNotificationCenter().postNotificationName(AyuConstants.MESSAGES_DELETED_NOTIFICATION, dialogId, messages);
+                });
+            } else if (messages != null && !messages.isEmpty() && taskId != 0) { // process TTL messages
+                var invalidate = new ArrayList<Integer>();
+
+                for (var msgId : messages) {
+                    if (AyuState.isDeletePermitted(dialogId, msgId)) {
+                        continue;
+                    }
+
+                    var msg = getMessagesStorage().getMessage(dialogId, msgId);
+                    if (msg != null) {
+                        if (msg.ttl > 0 || msg.ttl_period > 0) {
+                            invalidate.add(msgId);
+
+                            var prefs = new AyuSavePreferences(msg, currentAccount);
+                            prefs.setDialogId(dialogId);
+                            AyuMessagesController.getInstance().onMessageDeleted(prefs);
+                        }
+                    }
+                }
+
+                AndroidUtilities.runOnUIThread(() -> {
+                    // invalidating views
+                    getNotificationCenter().postNotificationName(AyuConstants.MESSAGES_DELETED_NOTIFICATION, dialogId, invalidate);
+                });
+            } else if ((messages != null && !messages.isEmpty())) { // process manual deletion of deleted messages
+                var ayuMessagesController = AyuMessagesController.getInstance();
+                var userId = UserConfig.getInstance(currentAccount).clientUserId;
+
+                for (var msgId : messages) {
+                    if (AyuState.isDeletePermitted(dialogId, msgId)) {
+                        ayuMessagesController.delete(userId, dialogId, msgId);
+                    }
+                }
+            }
+        }
+        // --- AyuGram hook
+
         ArrayList<Integer> toSend = null;
         long channelId;
         if (taskId == 0) {
@@ -6148,6 +6214,7 @@ public class MessagesController extends BaseController implements NotificationCe
                 channelId = 0;
             }
         }
+
         if (cacheOnly) {
             return;
         }
@@ -10516,7 +10583,7 @@ public class MessagesController extends BaseController implements NotificationCe
         ArrayList<Long> randomIds = new ArrayList<>();
         randomIds.add(randomId);
         getSecretChatHelper().sendMessagesReadMessage(chat, randomIds, null);
-        if (ttl > 0) {
+        if (ttl > 0 && !AyuConfig.saveDeletedMessages) {
             int time = getConnectionsManager().getCurrentTime();
             getMessagesStorage().createTaskForSecretChat(chat.id, time, time, 0, randomIds);
         }
@@ -12365,6 +12432,10 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     private void checkChannelError(String text, long channelId) {
+        if (AyuConfig.saveDeletedMessages) {
+            return;
+        }
+
         switch (text) {
             case "CHANNEL_PRIVATE":
                 getNotificationCenter().postNotificationName(NotificationCenter.chatInfoCantLoad, channelId, 0);
@@ -15117,6 +15188,50 @@ public class MessagesController extends BaseController implements NotificationCe
                 updatesOnMainThread.add(baseUpdate);
             }
         }
+
+        // --- AyuGram request hook
+        if (AyuConfig.saveDeletedMessages && deletedMessages != null) {
+            var currentTimeS = (int)(currentTime / 1000);
+            var messagesStorage = getMessagesStorage();
+            var userId = getAccountInstance().getUserConfig().clientUserId;
+            var ayuMessagesController = AyuMessagesController.getInstance();
+            for (int a = 0, size = deletedMessages.size(); a < size; a++) {
+                var possibleDialogId = deletedMessages.keyAt(a);
+                var messageIds = deletedMessages.valueAt(a);
+
+                var dialogIds = new ArrayList<Long>();
+
+                if (possibleDialogId == 0) {
+                    // Telegram sometimes won't give us dialog id directly...
+                    var possibleIds = messagesStorage.getDialogIdsToUpdate(possibleDialogId, messageIds);
+                    if (possibleIds != null && !possibleIds.isEmpty()) {
+                        dialogIds = possibleIds;
+                    }
+                }
+
+                if (dialogIds.isEmpty()) {
+                    dialogIds.add(possibleDialogId);
+                }
+
+                for (var dialogId : dialogIds) {
+                    for (var msgId : messageIds) {
+                        var msg = messagesStorage.getMessage(dialogId, msgId);
+                        var topicId = msg != null ? MessageObject.getTopicId(msg, isForum(dialogId)) : 0;
+
+                        // TLRPC.Message msg, int accountId, long dialogId, int topicId, int messageId, int requestCatchTime
+                        var prefs = new AyuSavePreferences(msg, currentAccount, dialogId, topicId, msgId, currentTimeS);
+                        ayuMessagesController.onMessageDeleted(prefs);
+                    }
+
+                    AndroidUtilities.runOnUIThread(() -> {
+                        // invalidating views
+                        getNotificationCenter().postNotificationName(AyuConstants.MESSAGES_DELETED_NOTIFICATION, dialogId, messageIds);
+                    });
+                }
+            }
+        }
+        // --- AyuGram request hook
+
         if (messages != null) {
             for (int a = 0, size = messages.size(); a < size; a++) {
                 long key = messages.keyAt(a);
@@ -16150,7 +16265,7 @@ public class MessagesController extends BaseController implements NotificationCe
                     getNotificationCenter().postNotificationName(NotificationCenter.messagesReadContent, key, value);
                 }
             }
-            if (deletedMessagesFinal != null) {
+            if (deletedMessagesFinal != null) { // --- AyuGram: don't notify that messages were deleted; already handled by MESSAGES_DELETED_NOTIFICATION
                 for (int a = 0, size = deletedMessagesFinal.size(); a < size; a++) {
                     long dialogId = deletedMessagesFinal.keyAt(a);
                     ArrayList<Integer> arrayList = deletedMessagesFinal.valueAt(a);
@@ -16593,6 +16708,9 @@ public class MessagesController extends BaseController implements NotificationCe
                 if (res.peers.isEmpty()) {
                     result = null;
                 } else {
+                    if (!AyuConfig.localPremium) { // для даунов, потом мб уберу
+                        res.peers.removeIf(element -> element.premium_required);
+                    }
                     result = res;
                     AndroidUtilities.runOnUIThread(() -> {
                         putUsers(res.users, false);

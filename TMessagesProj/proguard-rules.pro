@@ -35,6 +35,9 @@
 -keep class androidx.camera.core.impl.** { *; }
 -keep class androidx.camera.video.** { *; }
 
+# AyuSync
+-keep class com.radolyn.ayugram.sync.** { *; }
+
 # https://developers.google.com/ml-kit/known-issues#android_issues
 -keep class com.google.mlkit.nl.languageid.internal.LanguageIdentificationJni { *; }
 
@@ -105,6 +108,17 @@
 -dontwarn org.checkerframework.**
 -dontwarn javax.annotation.**
 -dontwarn androidx.camera.extensions.**
+
+# Don't warn about okhttp
+-dontwarn org.bouncycastle.jsse.BCSSLParameters
+-dontwarn org.bouncycastle.jsse.BCSSLSocket
+-dontwarn org.bouncycastle.jsse.provider.BouncyCastleJsseProvider
+-dontwarn org.conscrypt.Conscrypt$Version
+-dontwarn org.conscrypt.Conscrypt
+-dontwarn org.conscrypt.ConscryptHostnameVerifier
+-dontwarn org.openjsse.javax.net.ssl.SSLParameters
+-dontwarn org.openjsse.javax.net.ssl.SSLSocket
+-dontwarn org.openjsse.net.ssl.OpenJSSE
 
 # Use -keep to explicitly keep any other classes shrinking would remove
 -dontoptimize
